@@ -1,23 +1,32 @@
 package scalacache.redis
 
+import com.dimafeng.testcontainers.{ForAllTestContainer, GenericContainer}
+import org.scalatest.FlatSpec
 import redis.clients.jedis._
-
-import scala.language.postfixOps
 import scalacache._
 import scalacache.serialization.Codec
 
-class RedisCacheSpec extends RedisCacheSpecBase with RedisTestUtil {
+import scala.language.postfixOps
+
+class RedisCacheSpec extends FlatSpec with ForAllTestContainer with RedisBehaviours {
 
   type JClient = Jedis
   type JPool = JedisPool
+  private final val redisPort = 6379
+  override val container = GenericContainer("redis:alpine", Seq(redisPort))
+  private var pool: JedisPool = _
 
-  val withJedis = assumingRedisIsRunning _
+  override def afterStart(): Unit = {
+    pool = new JedisPool(container.containerIpAddress, container.mappedPort(redisPort))
+  }
+
+  override def beforeStop(): Unit = {
+    pool.close()
+  }
 
   def constructCache[V](pool: JPool)(implicit codec: Codec[V]): CacheAlg[V] =
     new RedisCache[V](jedisPool = pool)
 
-  def flushRedis(client: JClient): Unit = client.flushDB()
-
-  runTestsIfPossible()
+  it should behave like redisCache(pool)
 
 }

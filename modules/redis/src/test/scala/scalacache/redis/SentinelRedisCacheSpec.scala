@@ -1,42 +1,50 @@
 package scalacache.redis
 
+import com.dimafeng.testcontainers.{ForAllTestContainer, GenericContainer, LazyContainer, MultipleContainers}
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig
+import org.scalatest.FlatSpec
 import redis.clients.jedis._
-
-import scala.collection.JavaConverters._
-import scala.util.{Failure, Success, Try}
 import scalacache._
 import scalacache.serialization.Codec
 
-class SentinelRedisCacheSpec extends RedisCacheSpecBase {
+import scala.collection.JavaConverters._
+
+class SentinelRedisCacheSpec extends FlatSpec with ForAllTestContainer with RedisBehaviours {
 
   type JClient = Jedis
   type JPool = JedisSentinelPool
+  private final val sentinelPort = 26379
+  private final val redisPort = 6379
+  private val container1 =
+    GenericContainer("bitnami/redis:latest", Seq(redisPort), env = Map("ALLOW_EMPTY_PASSWORD" -> "true"))
+  private val container2 = LazyContainer(
+    GenericContainer(
+      "bitnami/redis-sentinel:latest",
+      Seq(sentinelPort),
+      Map("REDIS_MASTER_HOST" -> container1.containerIpAddress,
+          "REDIS_MASTER_PORT_NUMBER" -> container1.mappedPort(redisPort).toString)
+    ))
+  override val container = MultipleContainers(container1, container2)
 
-  val withJedis = assumingRedisSentinelIsRunning _
+  private var pool: JedisSentinelPool = _
 
-  def constructCache[V](pool: JPool)(implicit codec: Codec[V]): CacheAlg[V] =
-    new SentinelRedisCache[V](jedisPool = pool)
+  override def afterStart(): Unit = {
+    pool = new JedisSentinelPool(
+      "mymaster",
+      Set(s"${container2.container.containerIpAddress}:${container2.container.mappedPort(sentinelPort)}").asJava,
+      new GenericObjectPoolConfig
+    )
 
-  def flushRedis(client: JClient): Unit = client.flushDB()
-
-  /**
-    * This assumes that Redis master with name "master" and password "master-local" is running,
-    * and a sentinel is also running with to monitor this master on port 26379.
-    */
-  def assumingRedisSentinelIsRunning(f: (JedisSentinelPool, Jedis) => Unit): Unit = {
-    Try {
-      val jedisPool = new JedisSentinelPool("master", Set("127.0.0.1:26379").asJava, new GenericObjectPoolConfig)
-      val jedis = jedisPool.getResource()
-      jedis.ping()
-      (jedisPool, jedis)
-    } match {
-      case Failure(_) =>
-        alert("Skipping tests because Redis master and sentinel does not appear to be running on localhost.")
-      case Success((pool, client)) => f(pool, client)
-    }
+    println()
   }
 
-  runTestsIfPossible()
+  override def beforeStop(): Unit = {
+    pool.close()
+  }
+
+  def constructCache[V](pool: JPool)(implicit codec: Codec[V]): CacheAlg[V] =
+    new SentinelRedisCache[V](pool)
+
+  it should behave like redisCache(pool)
 
 }

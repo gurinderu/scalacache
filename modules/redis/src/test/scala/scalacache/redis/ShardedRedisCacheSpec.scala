@@ -1,44 +1,35 @@
 package scalacache.redis
 
+import com.dimafeng.testcontainers.{Container, ForAllTestContainer, GenericContainer, MultipleContainers}
+import org.scalatest.FlatSpec
 import redis.clients.jedis.{JedisPoolConfig, JedisShardInfo, ShardedJedis, ShardedJedisPool}
-
-import scala.util.{Failure, Success, Try}
-import scala.collection.JavaConverters._
 import scalacache._
 import scalacache.serialization.Codec
 
-class ShardedRedisCacheSpec extends RedisCacheSpecBase {
-
+class ShardedRedisCacheSpec extends FlatSpec with ForAllTestContainer with RedisBehaviours {
   type JClient = ShardedJedis
   type JPool = ShardedJedisPool
 
-  val withJedis = assumingMultipleRedisAreRunning _
+  private final val redisPort = 6379
+  private val container1 = GenericContainer("redis:alpine", Seq(redisPort))
+  private val container2 = GenericContainer("redis:alpine", Seq(redisPort))
+  override val container: Container = MultipleContainers(container1, container2)
+  private var pool: ShardedJedisPool = _
+
+  override def afterStart(): Unit = {
+    val shard1 = new JedisShardInfo(container1.containerIpAddress, container1.mappedPort(redisPort))
+    val shard2 = new JedisShardInfo(container2.containerIpAddress, container2.mappedPort(redisPort))
+
+    pool = new ShardedJedisPool(new JedisPoolConfig(), java.util.Arrays.asList(shard1, shard2))
+  }
+
+  override def beforeStop(): Unit = {
+    pool.close()
+  }
 
   def constructCache[V](pool: JPool)(implicit codec: Codec[V]): CacheAlg[V] =
     new ShardedRedisCache[V](jedisPool = pool)
 
-  def flushRedis(client: JClient): Unit =
-    client.getAllShards.asScala.foreach(_.flushDB())
-
-  def assumingMultipleRedisAreRunning(f: (ShardedJedisPool, ShardedJedis) => Unit): Unit = {
-    Try {
-      val shard1 = new JedisShardInfo("localhost", 6379)
-      val shard2 = new JedisShardInfo("localhost", 6380)
-
-      val jedisPool =
-        new ShardedJedisPool(new JedisPoolConfig(), java.util.Arrays.asList(shard1, shard2))
-      val jedis = jedisPool.getResource
-
-      jedis.getAllShards.asScala.foreach(_.ping())
-
-      (jedisPool, jedis)
-    } match {
-      case Failure(_) =>
-        alert("Skipping tests because it does not appear that multiple instances of Redis are running on localhost.")
-      case Success((pool, client)) => f(pool, client)
-    }
-  }
-
-  runTestsIfPossible()
+  it should behave like redisCache(pool)
 
 }

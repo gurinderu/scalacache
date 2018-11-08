@@ -9,7 +9,7 @@ import scalacache._
 class ReplaceAndTruncateSanitizerSpec extends FlatSpec with Matchers {
   behavior of "ReplaceAndTruncateSanitizer"
 
-  val sanitizer = new ReplaceAndTruncateSanitizer(maxKeyLength = 10)
+  val sanitizer = ReplaceAndTruncateSanitizer(maxKeyLength = 10)
 
   it should "truncate keys from the left if they are longer than maxKeyLength" in {
     val longKey = "0123456789A"

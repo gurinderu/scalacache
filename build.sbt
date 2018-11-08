@@ -43,6 +43,7 @@ lazy val root: Project = Project(id = "scalacache", base = file("."))
              catsEffect,
              monix,
              scalaz72,
+             twitterUtil,
              circe,
              tests)
 
@@ -71,16 +72,6 @@ lazy val core =
 
 lazy val coreJVM = core.jvm
 lazy val coreJS = core.js.settings(coverageEnabled := false)
-
-def jvmOnlyModule(name: String) =
-  Project(id = name, base = file(s"modules/$name"))
-    .settings(commonSettings)
-    .settings(
-      moduleName := s"scalacache-$name",
-      libraryDependencies += scalatest
-    )
-    .dependsOn(coreJVM)
-
 lazy val guava = jvmOnlyModule("guava")
   .settings(
     libraryDependencies ++= Seq(
@@ -88,14 +79,11 @@ lazy val guava = jvmOnlyModule("guava")
       "com.google.code.findbugs" % "jsr305" % "3.0.2"
     )
   )
-
 lazy val memcached = jvmOnlyModule("memcached")
   .settings(
-    libraryDependencies ++= Seq(
-      "net.spy" % "spymemcached" % "2.12.3"
-    )
+    libraryDependencies ++= Seq("net.spy" % "spymemcached" % "2.12.3",
+                                "com.dimafeng" %% "testcontainers-scala" % "0.22.0" % Test)
   )
-
 lazy val ehcache = jvmOnlyModule("ehcache")
   .settings(
     libraryDependencies ++= Seq(
@@ -105,16 +93,13 @@ lazy val ehcache = jvmOnlyModule("ehcache")
     coverageMinimum := 80,
     coverageFailOnMinimum := true
   )
-
 lazy val redis = jvmOnlyModule("redis")
   .settings(
-    libraryDependencies ++= Seq(
-      "redis.clients" % "jedis" % "2.9.0"
-    ),
+    libraryDependencies ++= Seq("redis.clients" % "jedis" % "2.9.0",
+                                "com.dimafeng" %% "testcontainers-scala" % "0.22.0" % Test),
     coverageMinimum := 56,
     coverageFailOnMinimum := true
   )
-
 lazy val cache2k = jvmOnlyModule("cache2k")
   .settings(
     libraryDependencies ++= Seq(
@@ -122,7 +107,6 @@ lazy val cache2k = jvmOnlyModule("cache2k")
       "org.cache2k" % "cache2k-api" % "1.2.0.Final"
     )
   )
-
 lazy val caffeine = jvmOnlyModule("caffeine")
   .settings(
     libraryDependencies ++= Seq(
@@ -132,14 +116,12 @@ lazy val caffeine = jvmOnlyModule("caffeine")
     coverageMinimum := 80,
     coverageFailOnMinimum := true
   )
-
 lazy val ohc = jvmOnlyModule("ohc")
   .settings(
     libraryDependencies ++= Seq(
       "org.caffinitas.ohc" % "ohc-core" % "0.7.0"
     )
   )
-
 lazy val catsEffect = jvmOnlyModule("cats-effect")
   .settings(
     libraryDependencies ++= Seq(
@@ -148,7 +130,6 @@ lazy val catsEffect = jvmOnlyModule("cats-effect")
     coverageMinimum := 50,
     coverageFailOnMinimum := true
   )
-
 lazy val monix = jvmOnlyModule("monix")
   .settings(
     libraryDependencies ++= Seq(
@@ -158,7 +139,6 @@ lazy val monix = jvmOnlyModule("monix")
     coverageFailOnMinimum := true
   )
   .dependsOn(catsEffect)
-
 lazy val scalaz72 = jvmOnlyModule("scalaz72")
   .settings(
     libraryDependencies ++= Seq(
@@ -167,7 +147,6 @@ lazy val scalaz72 = jvmOnlyModule("scalaz72")
     coverageMinimum := 40,
     coverageFailOnMinimum := true
   )
-
 lazy val twitterUtil = jvmOnlyModule("twitter-util")
   .settings(
     libraryDependencies ++= Seq(
@@ -176,7 +155,6 @@ lazy val twitterUtil = jvmOnlyModule("twitter-util")
     coverageMinimum := 40,
     coverageFailOnMinimum := true
   )
-
 lazy val circe = jvmOnlyModule("circe")
   .settings(
     libraryDependencies ++= Seq(
@@ -188,11 +166,12 @@ lazy val circe = jvmOnlyModule("circe")
     coverageMinimum := 80,
     coverageFailOnMinimum := true
   )
-
 lazy val tests = jvmOnlyModule("tests")
-  .settings(publishArtifact := false)
+  .settings(
+    publishArtifact := false,
+    libraryDependencies ++= Seq("com.dimafeng" %% "testcontainers-scala" % "0.22.0" % Test)
+  )
   .dependsOn(cache2k, caffeine, memcached, redis, ohc, catsEffect, monix, scalaz72, twitterUtil, circe)
-
 lazy val doc = jvmOnlyModule("doc")
   .enablePlugins(MicrositesPlugin)
   .settings(
@@ -222,7 +201,6 @@ lazy val doc = jvmOnlyModule("doc")
              scalaz72,
              twitterUtil,
              circe)
-
 lazy val benchmarks = jvmOnlyModule("benchmarks")
   .enablePlugins(JmhPlugin)
   .settings(
@@ -243,11 +221,8 @@ lazy val benchmarks = jvmOnlyModule("benchmarks")
   .dependsOn(cache2k)
   .dependsOn(caffeine)
   .dependsOn(ohc)
-
 lazy val scalatest = "org.scalatest" %% "scalatest" % "3.0.5" % Test
-
 lazy val scalacheck = "org.scalacheck" %% "scalacheck" % "1.14.0" % Test
-
 lazy val commonSettings =
   mavenSettings ++
     scalafmtSettings ++
@@ -258,7 +233,6 @@ lazy val commonSettings =
       releasePublishArtifactsAction := PgpKeys.publishSigned.value,
       parallelExecution in Test := false
     )
-
 lazy val mavenSettings = Seq(
   pomExtra :=
     <url>https://github.com/cb372/scalacache</url>
@@ -289,7 +263,6 @@ lazy val mavenSettings = Seq(
     false
   }
 )
-
 lazy val updateVersionInDocs = ReleaseStep(action = st => {
   val extracted = Project.extract(st)
   val projectVersion = extracted.get(Keys.version)
@@ -305,7 +278,6 @@ lazy val updateVersionInDocs = ReleaseStep(action = st => {
 
   st
 })
-
 lazy val commitUpdatedDocFiles = ReleaseStep(action = st => {
   val extracted = Project.extract(st)
   val projectVersion = extracted.get(Keys.version)
@@ -317,15 +289,23 @@ lazy val commitUpdatedDocFiles = ReleaseStep(action = st => {
 
   st
 })
+lazy val scalafmtSettings = Seq(
+  // work around https://github.com/lucidsoftware/neo-sbt-scalafmt/issues/18
+  sourceDirectories in scalafmt in Compile := (unmanagedSourceDirectories in Compile).value,
+  sourceDirectories in scalafmt in Test := (unmanagedSourceDirectories in Test).value
+)
+
+def jvmOnlyModule(name: String) =
+  Project(id = name, base = file(s"modules/$name"))
+    .settings(commonSettings)
+    .settings(
+      moduleName := s"scalacache-$name",
+      libraryDependencies += scalatest
+    )
+    .dependsOn(coreJVM)
 
 def scala211OnlyDeps(moduleIDs: ModuleID*) =
   libraryDependencies ++= (scalaBinaryVersion.value match {
     case "2.11" => moduleIDs
     case other  => Nil
   })
-
-lazy val scalafmtSettings = Seq(
-  // work around https://github.com/lucidsoftware/neo-sbt-scalafmt/issues/18
-  sourceDirectories in scalafmt in Compile := (unmanagedSourceDirectories in Compile).value,
-  sourceDirectories in scalafmt in Test := (unmanagedSourceDirectories in Test).value
-)
